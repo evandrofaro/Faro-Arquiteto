@@ -3,13 +3,22 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: FaroBot Studio — AI-powered code correction assistant
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: conversations
+    description: Chat conversation management
+  - name: models
+    description: Available AI models
+  - name: github
+    description: GitHub repository operations
+  - name: settings
+    description: Application settings
+
 paths:
   /healthz:
     get:
@@ -24,6 +33,258 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetail"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteConversation
+      tags: [conversations]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /conversations/{id}/messages:
+    post:
+      operationId: sendMessage
+      tags: [conversations]
+      summary: Send a message and get AI response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "200":
+          description: AI response message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Bad request
+
+  /models:
+    get:
+      operationId: listModels
+      tags: [models]
+      summary: List available HuggingFace code models
+      responses:
+        "200":
+          description: Available models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiModel"
+
+  /github/status:
+    get:
+      operationId: getGithubStatus
+      tags: [github]
+      summary: Check GitHub connection status
+      responses:
+        "200":
+          description: GitHub connection info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubStatus"
+
+  /github/repos:
+    get:
+      operationId: listGithubRepos
+      tags: [github]
+      summary: List user GitHub repositories
+      responses:
+        "200":
+          description: List of repos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GithubRepo"
+
+  /github/repos/{owner}/{repo}/contents:
+    get:
+      operationId: listRepoContents
+      tags: [github]
+      summary: List root-level contents of a repository
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Repository contents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GithubFile"
+
+  /github/file:
+    post:
+      operationId: fetchFileContent
+      tags: [github]
+      summary: Fetch file content from GitHub (POST to avoid query-param collisions)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileRequest"
+      responses:
+        "200":
+          description: File content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+
+  /github/file/update:
+    post:
+      operationId: updateFileContent
+      tags: [github]
+      summary: Update file content on GitHub
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileUpdate"
+      responses:
+        "200":
+          description: Updated file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+
+  /github/dir:
+    post:
+      operationId: listDirContents
+      tags: [github]
+      summary: List contents of a directory in a repository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DirRequest"
+      responses:
+        "200":
+          description: Directory contents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GithubFile"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get application settings
+      responses:
+        "200":
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update application settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +295,260 @@ components:
       required:
         - status
 
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        model:
+          type: string
+        messageCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - model
+        - messageCount
+        - createdAt
+        - updatedAt
+
+    ConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+        model:
+          type: string
+      required:
+        - title
+        - model
+
+    ConversationDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        model:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+      required:
+        - id
+        - title
+        - model
+        - createdAt
+        - updatedAt
+        - messages
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        fileContext:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    MessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+        fileContext:
+          type: ["string", "null"]
+        githubFile:
+          type: ["string", "null"]
+      required:
+        - content
+
+    AiModel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+      required:
+        - id
+        - name
+        - description
+        - category
+
+    GithubStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        username:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+      required:
+        - connected
+
+    GithubRepo:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        fullName:
+          type: string
+        description:
+          type: ["string", "null"]
+        private:
+          type: boolean
+        language:
+          type: ["string", "null"]
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - fullName
+        - private
+        - updatedAt
+
+    GithubFile:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, dir]
+        size:
+          type: ["integer", "null"]
+        sha:
+          type: string
+      required:
+        - name
+        - path
+        - type
+        - sha
+
+    FileContent:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        sha:
+          type: string
+        encoding:
+          type: string
+      required:
+        - path
+        - content
+        - sha
+        - encoding
+
+    FileRequest:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        path:
+          type: string
+      required:
+        - owner
+        - repo
+        - path
+
+    DirRequest:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        path:
+          type: string
+      required:
+        - owner
+        - repo
+        - path
+
+    FileUpdate:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        path:
+          type: string
+        content:
+          type: string
+        sha:
+          type: string
+        message:
+          type: string
+      required:
+        - owner
+        - repo
+        - path
+        - content
+        - sha
+        - message
+
+    Settings:
+      type: object
+      properties:
+        defaultModel:
+          type: string
+        huggingfaceToken:
+          type: ["string", "null"]
+        systemPrompt:
+          type: string
+      required:
+        - defaultModel
+        - systemPrompt
+
+    SettingsUpdate:
+      type: object
+      properties:
+        defaultModel:
+          type: string
+        huggingfaceToken:
+          type: ["string", "null"]
+        systemPrompt:
+          type: string

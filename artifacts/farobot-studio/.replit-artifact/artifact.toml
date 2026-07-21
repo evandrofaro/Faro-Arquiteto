@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "FaroBot Studio"
+version = "1.0.0"
+id = "artifacts/farobot-studio"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22409
+
+[services.development]
+run = "pnpm --filter @workspace/farobot-studio run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/farobot-studio", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/farobot-studio/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22409"
+BASE_PATH = "/"

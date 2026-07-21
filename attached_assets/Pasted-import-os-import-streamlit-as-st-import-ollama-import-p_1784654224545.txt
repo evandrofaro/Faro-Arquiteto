@@ -1,0 +1,133 @@
+import os
+import streamlit as st
+import ollama
+import pandas as pd
+import numpy as np
+
+# =====================================================================
+# 1. ORQUESTRADOR CENTRAL DE CÓDIGO E UI (A "IA do Replit")
+# =====================================================================
+class FaroBotOrchestrator:
+    def __init__(self, model_name="qwen2.5-coder:7b"):
+        self.model_name = model_name
+
+    def read_code(self, file_path: str) -> str:
+        """Lê o código de qualquer módulo do FaroBot."""
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        return f"# Arquivo {file_path} ainda não existe."
+
+    def apply_fix(self, file_path: str, instruction: str) -> str:
+        """Solicita à IA local a alteração ou correção do código em Python/UI."""
+        current_code = self.read_code(file_path)
+        prompt = f"""
+        Você é a IA Orquestradora do projeto FaroBot.
+        Sua tarefa é modificar o arquivo Python local: '{file_path}'.
+        Instruções do usuário: {instruction}
+
+        Código Atual:
+        ```python
+        {current_code}
+        ```
+        
+        Retorne APENAS o código Python completo atualizado, sem textos explicativos.
+        """
+        try:
+            response = ollama.generate(model=self.model_name, prompt=prompt)
+            new_code = response['response'].replace("```python", "").replace("```", "").strip()
+            
+            # Salva a alteração diretamente no disco
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(new_code)
+            return "✅ Módulo refatorado e atualizado com sucesso!"
+        except Exception as e:
+            return f"❌ Erro ao conectar ao Ollama: {str(e)}"
+
+
+# =====================================================================
+# 2. INTELIGÊNCIA DE TRADE (Hugging Face / Análise Financeira)
+# =====================================================================
+class TradeEngineAI:
+    def __init__(self):
+        # Aqui conectamos com pipelines do Hugging Face (Ex: Chronos ou FinBERT)
+        pass
+
+    def analyze_market_signal(self, price_data: list) -> dict:
+        """Gera sinal de trade com base em análise temporal/sentimento."""
+        if not price_data:
+            return {"signal": "HOLD", "confidence": 0.0}
+        
+        # Simulação da saída de modelo de séries temporais
+        last_price = price_data[-1]
+        moving_avg = sum(price_data[-5:]) / 5
+        
+        if last_price > moving_avg * 1.005:
+            return {"signal": "BUY", "confidence": 0.88}
+        elif last_price < moving_avg * 0.995:
+            return {"signal": "SELL", "confidence": 0.82}
+        return {"signal": "HOLD", "confidence": 0.50}
+
+
+# =====================================================================
+# 3. INTERFACE VISUAL INTEGRADA (Streamlit / Replit-Style)
+# =====================================================================
+def main():
+    st.set_page_config(page_title="FaroBot Studio All-in-One", layout="wide")
+    st.title("🤖 FaroBot Studio — Estação Unificada de Desenvolvimento e Trade")
+
+    orchestrator = FaroBotOrchestrator()
+    trade_ai = TradeEngineAI()
+
+    # Divisão da Tela em duas abas/colunas principais
+    tab_dev, tab_bot = st.tabs(["🛠️ Orquestrador & Código (Replit Mode)", "📊 Monitoramento do FaroBot"])
+
+    # --- ABA 1: AMBIENTE DE DESENVOLVIMENTO E CORREÇÕES ---
+    with tab_dev:
+        col_left, col_right = st.columns([1, 1])
+        
+        with col_left:
+            st.subheader("💬 Chat do Orquestrador")
+            selected_file = st.selectbox("Escolha o Módulo para Alterar/Refatorar", [
+                "core/engine.py",
+                "core/risk_manager.py",
+                "ui/dashboard.py",
+                "ai_engine/trade_signals.py"
+            ])
+            
+            user_instruction = st.text_area(
+                "Instruções de Correção / Novas Funcionalidades / Ajuste Visual:",
+                placeholder="Ex: Refatore a função de stop-loss para aceitar trailing stop dinâmico.",
+                height=150
+            )
+            
+            if st.button("Executar Alteração no FaroBot"):
+                with st.spinner("IA processando e gravando o código..."):
+                    result = orchestrator.apply_fix(selected_file, user_instruction)
+                    st.success(result)
+
+        with col_right:
+            st.subheader(f"📄 Inspect de Código: {selected_file}")
+            code_view = orchestrator.read_code(selected_file)
+            st.code(code_view, language="python")
+
+    # --- ABA 2: MONITORAMENTO VISUAL DO BOT E TRADING ---
+    with tab_bot:
+        st.subheader("📈 Painel de Controle e Sinais do FaroBot")
+        
+        # Dados simulados de mercado
+        prices = [100 + i + (np.random.randn() * 0.5) for i in range(20)]
+        signal_data = trade_ai.analyze_market_signal(prices)
+
+        # Métricas
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Preço Atual", f"${prices[-1]:.2f}")
+        m2.metric("Sinal Atual da IA (HF)", signal_data["signal"])
+        m3.metric("Confiança do Modelo", f"{signal_data['confidence']*100:.1f}%")
+
+        # Gráfico
+        st.line_chart(pd.DataFrame({"Preço": prices}))
+
+if __name__ == "__main__":
+    main()
