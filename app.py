@@ -1,46 +1,22 @@
 import streamlit as st
 import orchestrator
 
-st.set_page_config(page_title="Arquitetura Faro", layout="wide")
-st.title("🧠 Arquitetura Faro - Orquestrador")
+st.set_page_config(page_title="Arquitetura Faro - Orquestrador", layout="wide")
+st.title("🛠️ Centro de Alterações de Código")
 
-# Sidebar para escolha do modelo
-modelo_selecionado = st.sidebar.selectbox(
-    "Modelo de IA (Groq Nuvem):",
-    [
-        "llama-3.3-70b-versatile",
-        "qwen-2.5-32b",
-        "deepseek-r1-distill-llama-70b",
-        "llama-3.1-8b-instant"
-    ]
-)
+# Aba ou Bloco para Refatoração Automática
+st.subheader("Alteração Automática de Arquivos")
 
-# Histórico da sessão
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": "Você é o Arquiteto Faro, orquestrador especialista em Python, Streamlit e automações."}
-    ]
+caminho_alvo = st.text_input("Caminho do Arquivo (ex: app.py ou orchestrator.py):", "app.py")
+instrucao = st.text_area("O que você deseja alterar ou corrigir no código?", "")
 
-# Exibe histórico
-for msg in st.session_state.messages:
-    if msg["role"] != "system":
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-# Entrada do usuário
-if prompt := st.chat_input("Digite sua instrução..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Processando..."):
+if st.button("🚀 Executar Alteração"):
+    if not instrucao:
+        st.warning("Por favor, digite a instrução da alteração.")
+    else:
+        with st.spinner("Lendo arquivo, gerando alterações e atualizando..."):
             try:
-                resposta = orchestrator.consultar_groq(
-                    st.session_state.messages, 
-                    modelo=modelo_selecionado
-                )
-                st.markdown(resposta)
-                st.session_state.messages.append({"role": "assistant", "content": resposta})
+                res = orchestrator.processar_solicitacao_alteracao(caminho_alvo, instrucao)
+                st.success(res)
             except Exception as e:
-                st.error(f"Erro: {e}")
+                st.error(f"Erro durante a alteração: {e}")
