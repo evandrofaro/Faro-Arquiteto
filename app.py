@@ -1,62 +1,66 @@
 import streamlit as st
+import importlib
 import orchestrator
 
-st.set_page_config(page_title="Arquiteto Faro - Agent", layout="wide", page_icon="🧠")
+importlib.reload(orchestrator)
 
-st.title("🧠 Arquiteto Faro (Agente Orquestrador)")
-st.caption("Interaja com a IA para ler, planejar, refatorar e aplicar alterações diretamente no seu projeto no GitHub (Estilo Replit).")
+st.set_page_config(page_title="Arquiteto Faro - Centro de Comando Trade", layout="wide", page_icon="📈")
 
-# --- SIDEBAR: Configurações do Agente ---
-st.sidebar.header("⚙️ Painel de Controle do Agente")
+st.title("📈 Arquiteto Faro — Orquestrador do Bot de Trade")
+st.caption("Interaja com a IA para ler, auditar, refatorar e aplicar correções diretamente no seu repositório de Trading (Estilo Replit Agent).")
+
+# --- SIDEBAR: Configuração do Projeto Alvo ---
+st.sidebar.header("⚙️ Repositório Alvo (Trade)")
+
+# Informe o caminho exato do seu repositório de trade no GitHub:
+repo_alvo = st.sidebar.text_input("Repositório do Bot:", "evandrofaro/FaroBot")
+
 modelo_selecionado = st.sidebar.selectbox(
     "Modelo de IA:",
     ["llama-3.3-70b-versatile", "qwen-2.5-32b", "deepseek-r1-distill-llama-70b"]
 )
 
-repo_alvo = st.sidebar.text_input("Repositório Alvo (GitHub):", "evandrofaro/Faro-Arquiteto")
-
-if st.sidebar.button("📂 Mapear Estrutura do Projeto"):
-    with st.spinner("Lendo árvore de arquivos no GitHub..."):
+if st.sidebar.button("📂 Mapear Projeto de Trade"):
+    with st.spinner(f"Lendo arquivos de {repo_alvo}..."):
         try:
             arquivos = orchestrator.listar_arquivos_repositorio(repo_alvo)
-            st.sidebar.success(f"Encontrados {len(arquivos)} arquivos!")
+            st.sidebar.success(f"Encontrados {len(arquivos)} arquivos no Bot!")
             st.sidebar.json(arquivos)
         except Exception as e:
-            st.sidebar.error(f"Erro ao acessar GitHub: {e}")
+            st.sidebar.error(f"Erro ao conectar com {repo_alvo}: {e}")
 
-# --- CHAT CONVERSACIONAL ---
+# --- HISTÓRICO DO CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "system",
             "content": (
-                "Você é o Arquiteto Faro, um agente orquestrador especialista em Python, Streamlit, "
-                "arquitetura de software e automações. Você pode ler arquivos do repositório, analisar a estrutura "
-                "e propor ou aplicar alterações diretamente nos arquivos."
+                f"Você é o Arquiteto Faro, um engenheiro especialista em Python, bots de trading, "
+                f"integrações de APIs financeiras e arquitetura de software. "
+                f"Seu objetivo é analisar, orquestrar e sugerir/aplicar correções e melhorias "
+                f"no repositório do Bot de Trade ('{repo_alvo}')."
             )
         },
         {
             "role": "assistant",
-            "content": "Olá Evandro! Sou o Arquiteto Faro. O repositório está conectado. Como posso ajudar na estrutura, front-end ou back-end hoje?"
+            "content": f"Olá Evandro! Estou pronto para gerenciar e auditar o projeto **{repo_alvo}**. Qual módulo, estratégia ou correção no bot vamos analisar agora?"
         }
     ]
 
-# Exibe histórico do Chat
+# Exibe histórico
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-# Entradas do Usuário (Chat Input estilo Replit)
-if user_input := st.chat_input("Digite suas instruções (ex: 'Analise o projeto', 'Altere a cor da barra do Streamlit', etc.)"):
-    # Registra mensagem do usuário
+# --- INPUT DO USUÁRIO ---
+if user_input := st.chat_input("Ex: 'Analise os scripts do bot', 'Refatore o gerenciamento de risco', 'Corrija o erro de import do numpy'"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Resposta do Orquestrador
     with st.chat_message("assistant"):
-        with st.spinner("O Arquiteto está analisando o projeto e processando..."):
+        with st.spinner(f"Analisando repositório {repo_alvo} e processando resposta..."):
             try:
                 resposta = orchestrator.processar_chat_agente(
                     historico=st.session_state.messages,
@@ -66,4 +70,4 @@ if user_input := st.chat_input("Digite suas instruções (ex: 'Analise o projeto
                 st.markdown(resposta)
                 st.session_state.messages.append({"role": "assistant", "content": resposta})
             except Exception as e:
-                st.error(f"Erro no processamento do agente: {e}")
+                st.error(f"Erro ao processar: {e}")
