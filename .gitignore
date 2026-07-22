@@ -47,3 +47,23 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+# Arquivos de modelos de IA (evita estourar o limite de tamanho do GitHub)
+*.gguf
+*.bin
+*.onnx
+
+# Ambientes Virtuais Python
+venv/
+.venv/
+env/
+
+# Cache do Python e Streamlit
+__pycache__/
+*.pyc
+# Ignorar arquivos grandes e executáveis de modelos
+models/
+*.llamafile
+*.gguf
+*.bin
+*.exe
+/.local
