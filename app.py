@@ -2,65 +2,71 @@ import streamlit as st
 import importlib
 import orchestrator
 
+# Recarrega o orquestrador para aplicar as novas funções do Supabase
 importlib.reload(orchestrator)
 
-st.set_page_config(page_title="Arquiteto Faro - Centro de Comando Trade", layout="wide", page_icon="📈")
+st.set_page_config(page_title="Arquiteto Faro - Centro de Comando Trade", layout="wide", page_icon="🧠")
 
-st.title("📈 Arquiteto Faro — Orquestrador do Bot de Trade")
-st.caption("Interaja com a IA para ler, auditar, refatorar e aplicar correções diretamente no seu repositório de Trading (Estilo Replit Agent).")
+st.title("📈 Arquiteto Faro — Centro de Comando")
+st.caption("Memória Persistente (Supabase) + Automação de Commits (GitHub)")
 
 # --- SIDEBAR: Configuração do Projeto Alvo ---
 st.sidebar.header("⚙️ Repositório Alvo (Trade)")
 
-# Informe o caminho exato do seu repositório de trade no GitHub:
-repo_alvo = st.sidebar.text_input("Repositório do Bot:", "evandrofaro/FaroBot")
+repo_alvo = st.sidebar.text_input("Repositório do Bot:", "evandrofaro/Trade-Assistant-Tool")
 
 modelo_selecionado = st.sidebar.selectbox(
     "Modelo de IA:",
-    ["llama-3.3-70b-versatile", "qwen-2.5-32b", "deepseek-r1-distill-llama-70b"]
+    ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"]
 )
 
-if st.sidebar.button("📂 Mapear Projeto de Trade"):
+if st.sidebar.button("📂 Mapear Projeto no GitHub"):
     with st.spinner(f"Lendo arquivos de {repo_alvo}..."):
         try:
             arquivos = orchestrator.listar_arquivos_repositorio(repo_alvo)
-            st.sidebar.success(f"Encontrados {len(arquivos)} arquivos no Bot!")
+            st.sidebar.success(f"Encontrados {len(arquivos)} arquivos!")
             st.sidebar.json(arquivos)
         except Exception as e:
             st.sidebar.error(f"Erro ao conectar com {repo_alvo}: {e}")
 
-# --- HISTÓRICO DO CHAT ---
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "system",
-            "content": (
-                f"Você é o Arquiteto Faro, um engenheiro especialista em Python, bots de trading, "
-                f"integrações de APIs financeiras e arquitetura de software. "
-                f"Seu objetivo é analisar, orquestrar e sugerir/aplicar correções e melhorias "
-                f"no repositório do Bot de Trade ('{repo_alvo}')."
-            )
-        },
-        {
-            "role": "assistant",
-            "content": f"Olá Evandro! Estou pronto para gerenciar e auditar o projeto **{repo_alvo}**. Qual módulo, estratégia ou correção no bot vamos analisar agora?"
-        }
-    ]
+# --- MEMÓRIA PERSISTENTE DO SUPABASE ---
+# Carrega do banco de dados ao iniciar ou trocar de projeto
+if "messages" not in st.session_state or st.session_state.get("repo_atual") != repo_alvo:
+    st.session_state.repo_atual = repo_alvo
+    
+    # Busca mensagens anteriores salvas no Supabase
+    historico_bd = orchestrator.carregar_historico_bd(repo_alvo)
+    
+    if historico_bd:
+        st.session_state.messages = historico_bd
+    else:
+        # Apresentação inicial caso o histórico esteja vazio no banco
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": f"Olá! Sou o **Arquiteto Faro**. Conectado ao repositório `{repo_alvo}` e ao banco de dados **Supabase**. Como posso ajudar no projeto hoje?"
+            }
+        ]
 
-# Exibe histórico
+# Exibe o histórico de mensagens salvas
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-# --- INPUT DO USUÁRIO ---
-if user_input := st.chat_input("Ex: 'Analise os scripts do bot', 'Refatore o gerenciamento de risco', 'Corrija o erro de import do numpy'"):
+# --- ENTRADA DO USUÁRIO ---
+if user_input := st.chat_input("Ex: 'Analise os scripts do bot', 'Corrija o erro no arquivo app.py', 'Refatore o risco'"):
+    # Grava e exibe a mensagem do usuário no front-end
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
+        
+    # Grava no banco de dados Supabase
+    orchestrator.salvar_mensagem_bd(repo_alvo, "user", user_input)
 
+    # Processa com o Arquiteto
     with st.chat_message("assistant"):
-        with st.spinner(f"Analisando repositório {repo_alvo} e processando resposta..."):
+        with st.spinner(f"Analisando repositório e gravando contexto no Supabase..."):
             try:
                 resposta = orchestrator.processar_chat_agente(
                     historico=st.session_state.messages,
@@ -70,4 +76,4 @@ if user_input := st.chat_input("Ex: 'Analise os scripts do bot', 'Refatore o ger
                 st.markdown(resposta)
                 st.session_state.messages.append({"role": "assistant", "content": resposta})
             except Exception as e:
-                st.error(f"Erro ao processar: {e}")
+                st.error(f"Erro no processamento: {e}")
