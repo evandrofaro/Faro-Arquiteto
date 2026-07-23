@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from dotenv import load_dotenv
 from groq import Groq
 from github import Github
@@ -42,6 +43,13 @@ def listar_arquivos_repositorio(repo_fullname: str):
                 arquivos.append(file_content.path)
     return arquivos
 
+def ler_arquivo_github(repo_fullname: str, caminho: str):
+    """Lê o conteúdo textual de um arquivo direto do GitHub."""
+    g = obter_cliente_github()
+    repo = g.get_repo(repo_fullname)
+    file_content = repo.get_contents(caminho)
+    return file_content.decoded_content.decode("utf-8")
+
 def salvar_arquivo_github(repo_fullname: str, caminho: str, novo_conteudo: str, mensagem_commit: str):
     """Cria ou atualiza um arquivo diretamente no repositório do GitHub com busca prévia de SHA."""
     try:
@@ -72,7 +80,7 @@ def salvar_arquivo_github(repo_fullname: str, caminho: str, novo_conteudo: str, 
 
 # --- GESTÃO DE BANCO DE DADOS (SUPABASE) ---
 
-def carregar_historico_bd(repo_fullname: str, limite: int = 15):
+def carregar_historico_bd(repo_fullname: str, limite: int = 20):
     """Busca o histórico persistente gravado no Supabase para o repositório informado."""
     try:
         resposta = supabase.table("chat_history") \
@@ -87,7 +95,7 @@ def carregar_historico_bd(repo_fullname: str, limite: int = 15):
         return []
 
 def salvar_mensagem_bd(repo_fullname: str, role: str, content: str):
-    """Grava uma nova interacao no Supabase."""
+    """Grava uma nova interação no Supabase."""
     try:
         data = {
             "repo_fullname": repo_fullname,
@@ -115,33 +123,45 @@ def processar_chat_agente(historico: list, repo_fullname: str, modelo: str = "ll
     except Exception as e:
         contexto_projeto = f"Aviso de leitura no GitHub ('{repo_fullname}'): {e}"
 
-    # Filtra as mensagens de contexto recente da conversa
+    # Pega as mensagens da conversa
     mensagens_dialogo = [m for m in historico if m["role"] != "system"]
-    mensagens_memoria = mensagens_dialogo[-8:] if len(mensagens_dialogo) > 8 else mensagens_dialogo
+    mensagens_memoria = mensagens_dialogo[-10:] if len(mensagens_dialogo) > 10 else mensagens_dialogo
+
+    # Monta uma síntese do histórico para injeção direta no System Prompt
+    linhas_historico = []
+    for msg in mensagens_memoria:
+        papel = "Usuário" if msg["role"] == "user" else "Arquiteto Faro (Você)"
+        texto_resumido = msg["content"][:300] + "..." if len(msg["content"]) > 300 else msg["content"]
+        linhas_historico.append(f"- {papel}: {texto_resumido}")
+    
+    resumo_conversa = "\n".join(linhas_historico)
 
     prompt_sistema = {
         "role": "system",
         "content": (
-            f"Você é o Arquiteto Faro, líder técnico e engenheiro de software especialista em Python e bots de trading.\n"
-            f"Contexto do Projeto Alvo: {contexto_projeto}\n\n"
+            f"Você é o Arquiteto Faro, líder técnico e engenheiro de software especialista em Python e bots de trading.\n\n"
+            f"ESTRUTURA DO REPOSITÓRIO ALVO:\n{contexto_projeto}\n\n"
+            f"HISTÓRICO RECENTE DA CONVERSA (ANÁLISE OBRIGATÓRIA PARA CONTINUIDADE):\n"
+            f"{resumo_conversa}\n\n"
             "DIRETRIZES DE ATUAÇÃO E MEMÓRIA:\n"
-            "1. Toda conversa é salva no banco de dados Supabase do projeto 'Arquitetura Faro'. Nunca peça ao usuário para repetir contextos passados.\n"
-            "2. Você possui acesso total de LEITURA e ESCRITA no repositório do GitHub.\n"
-            "3. Quando o usuário pedir para alterar/criar/corrigir arquivos, responda no bloco JSON a seguir:\n\n"
+            "1. Analise obrigatoriamente o histórico recente acima antes de responder. Dê continuidade às decisões, diagnósticos e correções já iniciadas.\n"
+            "2. Toda conversa é salva no Supabase. Nunca peça ao usuário para reexplicar pontos já decididos.\n"
+            "3. Se o usuário pedir para criar, alterar ou corrigir arquivos no repositório, retorne APENAS o bloco JSON puro a seguir:\n\n"
             "```json\n"
             "{\n"
             '  "acao": "salvar",\n'
             '  "caminho": "nome_do_arquivo.py",\n'
             '  "commit_msg": "Descrição do commit",\n'
             '  "conteudo": "CODIGO_COMPLETO_AQUI",\n'
-            '  "explicacao": "Resumo da alteração"\n'
+            '  "explicacao": "Resumo técnico da alteração"\n'
             "}\n"
             "```\n"
-            "4. Se for apenas esclarecimento ou análise, responda em texto plano."
+            "4. IMPORTANTE: No campo 'conteudo', escape aspas e quebras de linha adequadamente para gerar um JSON válido.\n"
+            "5. Se for apenas esclarecimento ou análise, responda em texto plano."
         )
     }
 
-    mensagens_enviadas = [prompt_sistema] + mensagens_memoria
+    mensagens_enviadas = [prompt_sistema] + mensagens_memoria[-2:]
 
     response = client.chat.completions.create(
         model=modelo,
@@ -152,30 +172,44 @@ def processar_chat_agente(historico: list, repo_fullname: str, modelo: str = "ll
 
     resposta_texto = response.choices[0].message.content
 
-    # Se a IA respondeu com alteração em JSON, executa o commit
-    if "```json" in resposta_texto and '"acao": "salvar"' in resposta_texto:
+    # Tenta extrair o bloco JSON utilizando regex
+    match = re.search(r"```json\s*(\{.*?\})\s*```", resposta_texto, re.DOTALL)
+    if not match:
+        match = re.search(r"(\{[\s\S]*\"acao\"\s*:\s*\"salvar\"[\s\S]*\})", resposta_texto)
+
+    if match:
+        json_raw = match.group(1)
         try:
-            json_str = resposta_texto.split("```json")[1].split("```")[0].strip()
-            dados = json.loads(json_str)
+            dados = json.loads(json_raw, strict=False)
             
             caminho_arquivo = dados.get("caminho")
             conteudo_novo = dados.get("conteudo")
             mensagem_commit = dados.get("commit_msg", "Alteração via Arquiteto Faro")
-            explicacao = dados.get("explicacao", "Alteração efetuada.")
+            explicacao = dados.get("explicacao", "Alteração efetuada com sucesso.")
 
-            resultado_github = salvar_arquivo_github(repo_fullname, caminho_arquivo, conteudo_novo, mensagem_commit)
-            
-            resposta_final = f"🤖 **Arquiteto Faro — Commit Executado!**\n\n{explicacao}\n\n{resultado_github}"
-            
-            # Grava a ação no BD
-            salvar_mensagem_bd(repo_fullname, "assistant", resposta_final)
-            return resposta_final
-            
+            if caminho_arquivo and conteudo_novo:
+                resultado_github = salvar_arquivo_github(repo_fullname, caminho_arquivo, conteudo_novo, mensagem_commit)
+                resposta_final = f"🤖 **Arquiteto Faro — Commit Executado!**\n\n**Resumo:** {explicacao}\n\n{resultado_github}"
+                salvar_mensagem_bd(repo_fullname, "assistant", resposta_final)
+                return resposta_final
         except Exception as e:
-            msg_erro = f"⚠️ Erro ao processar o formato JSON de alteração: {e}\n\nResposta gerada:\n{resposta_texto}"
+            msg_erro = f"⚠️ O modelo gerou a alteração, mas o formato JSON continha erros: {e}\n\n**Resposta da IA:**\n{resposta_texto}"
             salvar_mensagem_bd(repo_fullname, "assistant", msg_erro)
             return msg_erro
 
     # Grava resposta normal no BD
     salvar_mensagem_bd(repo_fullname, "assistant", resposta_texto)
     return resposta_texto
+
+# --- FUNÇÕES DE SUPORTE LOCAL ---
+
+def ler_arquivo_local(caminho_relativo: str) -> str:
+    if not os.path.exists(caminho_relativo):
+        return f"Erro: O arquivo {caminho_relativo} não foi encontrado."
+    with open(caminho_relativo, "r", encoding="utf-8") as f:
+        return f.read()
+
+def salvar_arquivo_local(caminho_relativo: str, novo_conteudo: str) -> str:
+    with open(caminho_relativo, "w", encoding="utf-8") as f:
+        f.write(novo_conteudo)
+    return f"Sucesso: Arquivo {caminho_relativo} atualizado localmente!"
